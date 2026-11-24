@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Live Auction Watcher</title>
+  <!-- Dev-only test page for Phase 2. Open two tabs, place bids via REST, watch both update. -->
+  <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
+  <style>
+    :root { --bg: #f7f7f5; --fg: #1d1d1b; --muted: #6b6b66; --card: #fff; --line: #e3e2dd; --accent: #0b6e4f; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #161614; --fg: #ecebe6; --muted: #9a9993; --card: #1f1f1c; --line: #33322e; --accent: #4cc497; }
+    }
+    body { margin: 0; padding: 24px 16px; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, sans-serif; }
+    main { max-width: 720px; margin: 0 auto; }
+    h1 { font-size: 20px; margin: 0 0 16px; }
+    form { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    input { flex: 1 1 260px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--fg); }
+    button { padding: 8px 14px; border: 0; border-radius: 6px; background: var(--accent); color: #fff; cursor: pointer; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    .price { font-size: 32px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .muted { color: var(--muted); font-size: 13px; }
+    #log { font: 12px/1.6 ui-monospace, monospace; white-space: pre-wrap; max-height: 320px; overflow: auto; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Live auction watcher</h1>
+  <form id="f">
+    <input id="auctionId" placeholder="Auction id (UUID)" required>
+    <input id="token" placeholder="Access token (optional - anonymous watching works)">
+    <button>Watch</button>
+  </form>
+  <div class="card">
+    <div class="muted" id="status">Not connected</div>
+    <div class="price" id="price">-</div>
+    <div class="muted" id="meta"></div>
+  </div>
+  <div class="card"><div class="muted">Raw messages</div><div id="log"></div></div>
+</main>
+<script>
+  const $ = (id) => document.getElementById(id);
+  let client;
+
+  $('f').addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (client) client.deactivate();
+    const auctionId = $('auctionId').value.trim();
+    const token = $('token').value.trim();
+
+    client = new StompJs.Client({
+      brokerURL: `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`,
+      connectHeaders: token ? { Authorization: `Bearer ${token}` } : {},
+      reconnectDelay: 3000,
+      onConnect: () => {
+        $('status').textContent = `Connected, watching /topic/auctions/${auctionId}`;
+        client.subscribe(`/topic/auctions/${auctionId}`, (frame) => {
+          const m = JSON.parse(frame.body);
+          $('log').textContent = frame.body + '\n' + $('log').textContent;
+          if (m.type === 'BID_PLACED') {
+            $('price').textContent = `${m.currentPrice} ${m.currency}`;
+            $('meta').textContent = `${m.bidCount} bids · next bid ≥ ${m.minimumNextBid} · ends ${new Date(m.endTime).toLocaleTimeString()}`;
+          } else if (m.type === 'AUCTION_ENDED') {
+            $('meta').textContent = `Ended: ${m.outcome}${m.winnerId ? ' · winner ' + m.winnerId : ''}`;
+          }
+        });
+      },
+      onStompError: (frame) => { $('status').textContent = 'Error: ' + frame.headers.message; },
+      onWebSocketClose: () => { $('status').textContent = 'Disconnected (retrying...)'; },
+    });
+    client.activate();
+  });
+</script>
+</body>
+</html>

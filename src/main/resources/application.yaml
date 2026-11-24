@@ -1,0 +1,77 @@
+spring:
+  application:
+    name: java-spring-auction
+
+  datasource:
+    url: jdbc:postgresql://localhost:5433/auction   # docker-compose maps the container to 5433
+    username: auction
+    password: auction
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate          # Flyway owns the schema; Hibernate only checks it matches
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    locations: classpath:db/migration
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Keycloak realm from docker-compose. Spring fetches the signing keys (JWKS) from here.
+          issuer-uri: http://localhost:8180/realms/auction
+          # Tokens must be minted for this API (added by the audience mapper on the Keycloak client).
+          audiences: auction-api
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      # Keys and values are plain strings: the outbox already holds the JSON.
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all                     # ack only once every in-sync replica has the record
+      properties:
+        enable.idempotence: true    # broker drops duplicates caused by producer retries
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: latest     # live broadcasts only care about new events
+
+server:
+  error:
+    include-message: always
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+app:
+  cors:
+    allowed-origins: http://localhost:5173,http://localhost:3000
+
+auction:
+  min-duration: PT1M              # short so you can watch auctions close while developing
+  max-duration: P30D
+  bidding:
+    # Anti-sniping "soft close": a bid inside the last 2 minutes pushes the end time out.
+    soft-close-window: PT2M
+    soft-close-extension: PT2M
+  scheduler:
+    poll-interval: PT1S
+    batch-size: 100
+
+outbox:
+  relay:
+    poll-interval: PT0.5S         # worst-case extra latency between a bid and its Kafka record
+    batch-size: 100
+
+logging:
+  level:
+    com.learning.auction: DEBUG

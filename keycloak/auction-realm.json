@@ -1,0 +1,104 @@
+{
+  "realm": "auction",
+  "enabled": true,
+  "displayName": "Auction Platform",
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": false,
+  "loginWithEmailAllowed": true,
+  "resetPasswordAllowed": true,
+  "bruteForceProtected": true,
+  "accessTokenLifespan": 900,
+  "sslRequired": "none",
+  "roles": {
+    "realm": [
+      { "name": "user", "description": "Can list items, create auctions and bid" },
+      { "name": "admin", "description": "Monitors activity, handles fraud and disputes" },
+      { "name": "offline_access", "description": "Allows refresh tokens that outlive the session" },
+      { "name": "uma_authorization", "description": "User-managed access" },
+      {
+        "name": "default-roles-auction",
+        "description": "Granted to every new user, including self-registered ones",
+        "composite": true,
+        "composites": { "realm": ["user", "offline_access", "uma_authorization"] }
+      }
+    ]
+  },
+  "defaultRole": { "name": "default-roles-auction" },
+  "clients": [
+    {
+      "clientId": "auction-web",
+      "name": "Auction web frontend",
+      "description": "Public client for the React SPA (Authorization Code + PKCE). Direct access grants are enabled ONLY to make local testing with Postman/curl easy.",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:5173/*",
+        "http://localhost:3000/*",
+        "https://oauth.pstmn.io/v1/callback"
+      ],
+      "webOrigins": ["http://localhost:5173", "http://localhost:3000"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:5173/*##http://localhost:3000/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "auction-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "auction-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "alice",
+      "email": "alice@example.test",
+      "firstName": "Alice",
+      "lastName": "Seller",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "alice", "temporary": false }],
+      "realmRoles": ["default-roles-auction"]
+    },
+    {
+      "username": "bob",
+      "email": "bob@example.test",
+      "firstName": "Bob",
+      "lastName": "Bidder",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "bob", "temporary": false }],
+      "realmRoles": ["default-roles-auction"]
+    },
+    {
+      "username": "carol",
+      "email": "carol@example.test",
+      "firstName": "Carol",
+      "lastName": "Bidder",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "carol", "temporary": false }],
+      "realmRoles": ["default-roles-auction"]
+    },
+    {
+      "username": "admin",
+      "email": "admin@example.test",
+      "firstName": "Platform",
+      "lastName": "Admin",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "admin", "temporary": false }],
+      "realmRoles": ["default-roles-auction", "admin"]
+    }
+  ]
+}

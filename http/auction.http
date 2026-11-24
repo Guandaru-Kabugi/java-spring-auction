@@ -1,0 +1,72 @@
+### Requests for the IntelliJ HTTP client. Run them top to bottom.
+### Prerequisite: `docker compose up -d` and the app running on :8080.
+
+@api = http://localhost:8080
+@kc = http://localhost:8180/realms/auction/protocol/openid-connect/token
+
+### 1. Token for alice (seller)
+POST {{kc}}
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=password&client_id=auction-web&username=alice&password=alice
+
+> {% client.global.set("alice", response.body.access_token); %}
+
+### 2. Token for bob (bidder)
+POST {{kc}}
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=password&client_id=auction-web&username=bob&password=bob
+
+> {% client.global.set("bob", response.body.access_token); %}
+
+### 3. Who am I?
+GET {{api}}/api/users/me
+Authorization: Bearer {{alice}}
+
+### 4. Alice lists an item
+POST {{api}}/api/listings
+Authorization: Bearer {{alice}}
+Content-Type: application/json
+
+{
+  "title": "PlayStation 5 - Disc Edition",
+  "description": "Barely used, two controllers",
+  "category": "GAMING",
+  "condition": "LIKE_NEW"
+}
+
+> {% client.global.set("listingId", response.body.id); %}
+
+### 5. Alice auctions it for 3 minutes (reserve 120)
+< {% request.variables.set("endTime", new Date(Date.now() + 3 * 60 * 1000).toISOString()); %}
+POST {{api}}/api/auctions
+Authorization: Bearer {{alice}}
+Content-Type: application/json
+
+{
+  "listingId": "{{listingId}}",
+  "startingPrice": 100.00,
+  "reservePrice": 120.00,
+  "minIncrement": 5.00,
+  "endTime": "{{endTime}}"
+}
+
+> {% client.global.set("auctionId", response.body.id); %}
+
+### 6. Bob bids (re-run this request unchanged to see the idempotent replay)
+POST {{api}}/api/auctions/{{auctionId}}/bids
+Authorization: Bearer {{bob}}
+Content-Type: application/json
+Idempotency-Key: bob-bid-1
+
+{ "amount": 100.00 }
+
+### 7. Live auctions (public, no token)
+GET {{api}}/api/auctions/active
+
+### 8. Auction state (public)
+GET {{api}}/api/auctions/{{auctionId}}
+
+### 9. Bid history (public)
+GET {{api}}/api/auctions/{{auctionId}}/bids
